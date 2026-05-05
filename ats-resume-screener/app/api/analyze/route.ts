@@ -85,7 +85,13 @@ export async function POST(req: NextRequest) {
     const response = await client.messages.create({
       model: 'claude-opus-4-7',
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system: [
+        {
+          type: 'text',
+          text: SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: [
         {
           role: 'user',
