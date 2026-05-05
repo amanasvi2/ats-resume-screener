@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 
 export const maxDuration = 60;
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const SYSTEM_PROMPT = `You are an expert ATS (Applicant Tracking System) analyzer and career coach. Your job is to rigorously analyze resumes against job descriptions and provide detailed, actionable feedback that helps job seekers improve their chances.
 
@@ -82,17 +82,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const response = await client.messages.create({
-      model: 'claude-opus-4-7',
+    const completion = await client.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 4096,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
+      response_format: { type: 'json_object' },
       messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
           content: `Analyze this resume against the job description. Return only valid JSON.
@@ -106,17 +101,16 @@ ${resumeText}`,
       ],
     });
 
-    const textBlock = response.content.find((block) => block.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
+    const text = completion.choices[0]?.message?.content;
+    if (!text) {
       return NextResponse.json({ error: 'No analysis returned from AI' }, { status: 500 });
     }
 
     let analysis;
     try {
-      analysis = JSON.parse(textBlock.text);
+      analysis = JSON.parse(text);
     } catch {
-      // Try to extract JSON if model added extra text
-      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      const match = text.match(/\{[\s\S]*\}/);
       if (!match) {
         return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 });
       }
